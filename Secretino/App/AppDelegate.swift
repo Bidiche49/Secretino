@@ -2,7 +2,7 @@
 //  AppDelegate.swift
 //  Secretino
 //
-//  Gestionnaire de l'application menu bar
+//  Gestionnaire de l'application menu bar avec raccourcis globaux
 //
 
 import Cocoa
@@ -11,6 +11,8 @@ import SwiftUI
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
+    private var settingsWindow: NSWindow?
+    private var menu: NSMenu!
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Initialiser OpenSSL
@@ -22,11 +24,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Créer le popover pour l'interface
         setupPopover()
         
+        // Créer le menu contextuel
+        setupMenu()
+        
+        // Vérifier les permissions au premier lancement
+        PermissionsHelper.shared.checkInitialPermissions()
+        
         // Test rapide de l'intégration crypto
         testCryptoIntegration()
     }
     
     func applicationWillTerminate(_ notification: Notification) {
+        // Désactiver les raccourcis globaux
+        GlobalHotKeyManager.shared.disableHotkeys()
+        
         // Nettoyer OpenSSL à la fermeture
         cleanup_openssl()
     }
@@ -36,10 +47,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         
         if let button = statusItem.button {
-            // Icône temporaire (on créera une vraie icône plus tard)
-            button.title = "🔐"
-            button.action = #selector(togglePopover)
+            // Icône améliorée
+            if let image = NSImage(systemSymbolName: "lock.shield.fill", accessibilityDescription: "Secretino") {
+                image.size = NSSize(width: 18, height: 18)
+                button.image = image
+            } else {
+                button.title = "🔐"
+            }
+            
+            button.action = #selector(statusItemClicked)
             button.target = self
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
     }
     
@@ -50,14 +68,122 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         popover.contentViewController = NSHostingController(rootView: SecretinoView())
     }
     
+    private func setupMenu() {
+        menu = NSMenu()
+        
+        // Item principal
+        menu.addItem(NSMenuItem(title: "Ouvrir Secretino", action: #selector(showPopover), keyEquivalent: ""))
+        menu.addItem(NSMenuItem.separator())
+        
+        // Raccourcis globaux
+        let hotkeyItem = NSMenuItem(title: "Raccourcis globaux", action: nil, keyEquivalent: "")
+        let hotkeySubmenu = NSMenu()
+        
+        let encryptItem = NSMenuItem(title: "Chiffrer sélection", action: #selector(encryptSelection), keyEquivalent: "e")
+        encryptItem.keyEquivalentModifierMask = [.command, .option]
+        hotkeySubmenu.addItem(encryptItem)
+        
+        let decryptItem = NSMenuItem(title: "Déchiffrer sélection", action: #selector(decryptSelection), keyEquivalent: "d")
+        decryptItem.keyEquivalentModifierMask = [.command, .option]
+        hotkeySubmenu.addItem(decryptItem)
+        
+        hotkeyItem.submenu = hotkeySubmenu
+        menu.addItem(hotkeyItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        // Préférences
+        menu.addItem(NSMenuItem(title: "Préférences...", action: #selector(showSettings), keyEquivalent: ","))
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        // À propos et Quitter
+        menu.addItem(NSMenuItem(title: "À propos de Secretino", action: #selector(showAbout), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Quitter", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+    }
+    
+    @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
+        guard let event = NSApp.currentEvent else { return }
+        
+        if event.type == .rightMouseUp {
+            // Clic droit : afficher le menu
+            statusItem.menu = menu
+            statusItem.button?.performClick(nil)
+            statusItem.menu = nil
+        } else {
+            // Clic gauche : afficher le popover
+            togglePopover()
+        }
+    }
+    
     @objc private func togglePopover() {
         if let button = statusItem.button {
             if popover.isShown {
                 popover.performClose(nil)
             } else {
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: NSRectEdge.minY)
+                
+                // S'assurer que la fenêtre du popover devient key
+                if let popoverWindow = popover.contentViewController?.view.window {
+                    popoverWindow.makeKey()
+                }
             }
         }
+    }
+    
+    @objc private func showPopover() {
+        if let button = statusItem.button {
+            if !popover.isShown {
+                popover.show(relativeTo: button.bounds, of: button, preferredEdge: NSRectEdge.minY)
+            }
+        }
+    }
+    
+    @objc private func showSettings() {
+        if settingsWindow == nil {
+            settingsWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 400, height: 720),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            settingsWindow?.title = "Préférences Secretino"
+            settingsWindow?.center()
+            settingsWindow?.contentView = NSHostingView(rootView: SettingsView())
+            settingsWindow?.minSize = NSSize(width: 400, height: 720)
+            settingsWindow?.maxSize = NSSize(width: 600, height: 800)
+        }
+        
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+    
+    @objc private func showAbout() {
+        let alert = NSAlert()
+        alert.messageText = "Secretino"
+        alert.informativeText = """
+        Version 1.0
+        
+        Cryptage militaire AES-256-GCM
+        pour macOS
+        
+        🔐 Chiffrement ultra-sécurisé
+        ⚡ Raccourcis globaux
+        🛡️ Protection maximale
+        
+        © 2025 Secretino
+        """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+    
+    @objc private func encryptSelection() {
+        GlobalHotKeyManager.shared.processSelectedText(encrypt: true)
+    }
+    
+    @objc private func decryptSelection() {
+        GlobalHotKeyManager.shared.processSelectedText(encrypt: false)
     }
     
     private func testCryptoIntegration() {

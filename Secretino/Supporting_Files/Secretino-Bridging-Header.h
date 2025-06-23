@@ -8,6 +8,6 @@
 #ifndef Secretino_Bridging_Header_h
 #define Secretino_Bridging_Header_h
 
-#include "Crypto/crypto_bridge.h"
+#include "../Crypto/crypto_bridge.h"
 
 #endif /* Secretino_Bridging_Header_h */
