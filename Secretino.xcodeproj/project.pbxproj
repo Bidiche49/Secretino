@@ -10,22 +10,9 @@
 		E7C3C4E42E056E76001F1F5D /* Secretino.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Secretino.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		E7C3C5202E094B39001F1F5D /* Exceptions for "Secretino" folder in "Secretino" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = E7C3C4E32E056E76001F1F5D /* Secretino */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		E7C3C4E62E056E76001F1F5D /* Secretino */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				E7C3C5202E094B39001F1F5D /* Exceptions for "Secretino" folder in "Secretino" target */,
-			);
 			path = Secretino;
 			sourceTree = "<group>";
 		};
