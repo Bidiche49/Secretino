@@ -16,15 +16,11 @@ struct SecretinoView: View {
     @State private var showOverlay: Bool = false
     @State private var statusMessage: String = ""
     @State private var showStatus: Bool = false
+    @State private var animate: Bool = false
     @FocusState private var isTextFieldFocused: Bool
     
-    // Référence au service de cryptage global (OPTIONNEL)
-    let selectionCryptoService: SelectionCryptoService?
-    
-    // Constructeur avec paramètre OPTIONNEL
-    init(selectionCryptoService: SelectionCryptoService? = nil) {
-        self.selectionCryptoService = selectionCryptoService
-    }
+    // Référence au gestionnaire de raccourcis globaux
+    @ObservedObject private var hotkeyManager = GlobalHotkeyManager.shared
     
     // Types d'overlay pour les erreurs uniquement
     enum OverlayType {
@@ -46,11 +42,11 @@ struct SecretinoView: View {
                 contentView
             }
             .frame(width: 360, height: 500)
-            .scrollDisabled(outputText.isEmpty) // Désactive le scroll quand pas de résultat
+            .scrollDisabled(outputText.isEmpty)
             .blur(radius: showOverlay ? 2 : 0)
             .animation(.easeInOut(duration: 0.2), value: showOverlay)
             
-            // Overlay de premier plan (inchangé)
+            // Overlay de premier plan
             if showOverlay {
                 Color.black.opacity(0.4)
                     .ignoresSafeArea()
@@ -80,12 +76,16 @@ struct SecretinoView: View {
                 .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showOverlay)
             }
         }
+        .background(KeyboardShortcutHandler(
+            onCopy: { copyToClipboard() },
+            onPaste: { pasteAndProcess() }
+        ))
     }
     
     // Contenu principal avec hauteur stable
     private var contentView: some View {
-        VStack(spacing: 20) {
-            // Header (position fixe)
+        VStack(spacing: 18) {
+            // Header
             VStack {
                 Image(systemName: "lock.shield.fill")
                     .font(.system(size: 40))
@@ -103,18 +103,14 @@ struct SecretinoView: View {
             
             Divider()
             
-            // Mode selection (position fixe) avec synchronisation
+            // Mode selection
             Picker("Mode", selection: $isEncrypting) {
                 Text("🔒 Chiffrer").tag(true)
                 Text("🔓 Déchiffrer").tag(false)
             }
             .pickerStyle(SegmentedPickerStyle())
-            .onChange(of: isEncrypting) { newValue in
-                // Synchroniser le mode par défaut pour les raccourcis globaux (si disponible)
-                selectionCryptoService?.isEncryptingByDefault = newValue
-            }
             
-            // Passphrase (position fixe) avec synchronisation
+            // Passphrase avec synchronisation
             VStack(alignment: .leading) {
                 Text("Passphrase")
                     .font(.headline)
@@ -122,19 +118,20 @@ struct SecretinoView: View {
                 SecureField("Entrez votre passphrase", text: $passphrase)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .onChange(of: passphrase) { newValue in
-                        // Synchroniser avec le service global (si disponible)
-                        selectionCryptoService?.globalPassphrase = newValue
+                        // Synchroniser avec le gestionnaire global si les raccourcis sont activés
+                        if hotkeyManager.isEnabled && !newValue.isEmpty {
+                            hotkeyManager.globalPassphrase = newValue
+                        }
                     }
                     .onAppear {
-                        // Initialiser depuis le service global (si disponible)
-                        if let service = selectionCryptoService {
-                            passphrase = service.globalPassphrase
-                            isEncrypting = service.isEncryptingByDefault
+                        // Charger la passphrase globale si elle existe
+                        if !hotkeyManager.globalPassphrase.isEmpty {
+                            passphrase = hotkeyManager.globalPassphrase
                         }
                     }
             }
             
-            // Input text avec design amélioré
+            // Input text
             VStack(alignment: .leading) {
                 Text(isEncrypting ? "Texte à chiffrer" : "Texte chiffré (Base64)")
                     .font(.headline)
@@ -142,7 +139,7 @@ struct SecretinoView: View {
                 ZStack(alignment: .topTrailing) {
                     TextEditor(text: $inputText)
                         .focused($isTextFieldFocused)
-                        .padding(8) // Marge interne pour le texte
+                        .padding(8)
                         .background(Color(NSColor.textBackgroundColor))
                         .cornerRadius(8)
                         .overlay(
@@ -151,7 +148,7 @@ struct SecretinoView: View {
                         )
                         .frame(height: 100)
                     
-                    // Bouton clear (petite croix)
+                    // Bouton clear
                     if !inputText.isEmpty {
                         Button(action: {
                             clearInputText()
@@ -168,9 +165,8 @@ struct SecretinoView: View {
                 }
             }
             
-            // Action buttons avec nouvelle disposition
+            // Action buttons
             VStack(spacing: 12) {
-                // Ligne principale : Coller+Action et Copier
                 HStack {
                     Button(action: {
                         pasteAndProcess()
@@ -186,6 +182,20 @@ struct SecretinoView: View {
                     .keyboardShortcut("v", modifiers: .command)
                     
                     Button(action: {
+                        processText()
+                    }) {
+                        HStack {
+                            Image(systemName: isEncrypting ? "lock.fill" : "lock.open.fill")
+                            Text(isEncrypting ? "Chiffrer" : "Déchiffrer")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(inputText.isEmpty || passphrase.isEmpty)
+                }
+                
+                HStack {
+                    Button(action: {
                         copyToClipboard()
                     }) {
                         HStack {
@@ -197,21 +207,6 @@ struct SecretinoView: View {
                     .buttonStyle(.bordered)
                     .disabled(outputText.isEmpty)
                     .keyboardShortcut("c", modifiers: .command)
-                }
-                
-                // Ligne secondaire : Action manuel et Clear
-                HStack {
-                    Button(action: {
-                        processText()
-                    }) {
-                        HStack {
-                            Image(systemName: isEncrypting ? "lock.fill" : "lock.open.fill")
-                            Text(isEncrypting ? "Chiffrer" : "Déchiffrer")
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(inputText.isEmpty || passphrase.isEmpty)
                     
                     Button(action: {
                         clearResult()
@@ -227,7 +222,7 @@ struct SecretinoView: View {
                 }
             }
             
-            // Espace réservé pour le message de statut (hauteur fixe)
+            // Message de statut
             VStack {
                 if showStatus {
                     Text(statusMessage)
@@ -235,76 +230,79 @@ struct SecretinoView: View {
                         .foregroundColor(.green)
                         .transition(.opacity)
                         .animation(.easeInOut(duration: 0.3), value: showStatus)
+                } else if !outputText.isEmpty {
+                    VStack(spacing: 4) {
+                        Text("Faites défiler pour voir le résultat")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        
+                        Image(systemName: "chevron.down")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                            .offset(y: animate ? 3 : -3)
+                            .onAppear {
+                                withAnimation(Animation.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                                    animate.toggle()
+                                }
+                            }
+                    }
                 } else {
-                    Text(" ") // Espace réservé invisible
+                    Text("  ")
                         .font(.caption)
                 }
             }
-            .frame(height: 20) // Hauteur fixe réservée
+            .frame(height: 10)
             
-            // Raccourcis globaux info (seulement si service disponible)
-            if !passphrase.isEmpty && selectionCryptoService != nil {
-                VStack(spacing: 6) {
-                    Text("Raccourcis globaux actifs:")
+            // Info sur les raccourcis globaux
+            if hotkeyManager.isEnabled && !hotkeyManager.globalPassphrase.isEmpty {
+                VStack(spacing: 4) {
+                    Text("Raccourcis globaux actifs")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                         .fontWeight(.medium)
                     
-                    HStack(spacing: 12) {
-                        VStack(spacing: 2) {
-                            Text("⌘⇧E")
+                    HStack(spacing: 20) {
+                        HStack(spacing: 4) {
+                            Text("⌘⌥E")
                                 .font(.caption2)
-                                .fontFamily(.monospaced)
                                 .fontWeight(.semibold)
                                 .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(Color.green.opacity(0.15))
+                                .padding(.vertical, 2)
+                                .background(Color.green.opacity(0.2))
                                 .foregroundColor(.green)
                                 .cornerRadius(4)
-                            
                             Text("Chiffrer")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
                         
-                        Spacer()
-                        
-                        Image(systemName: "globe")
-                            .font(.caption2)
-                            .foregroundColor(.blue)
-                        
-                        Spacer()
-                        
-                        VStack(spacing: 2) {
-                            Text("⌘⇧D")
+                        HStack(spacing: 4) {
+                            Text("⌘⌥D")
                                 .font(.caption2)
-                                .fontFamily(.monospaced)
                                 .fontWeight(.semibold)
                                 .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(Color.orange.opacity(0.15))
+                                .padding(.vertical, 2)
+                                .background(Color.orange.opacity(0.2))
                                 .foregroundColor(.orange)
                                 .cornerRadius(4)
-                            
                             Text("Déchiffrer")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(8)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: 6)
                         .fill(Color.blue.opacity(0.05))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8)
+                            RoundedRectangle(cornerRadius: 6)
                                 .stroke(Color.blue.opacity(0.2), lineWidth: 1)
                         )
                 )
             }
             
-            // Espace réservé pour Output text (hauteur dynamique mais stable)
+            // Output text
             VStack(alignment: .leading) {
                 if !outputText.isEmpty {
                     HStack {
@@ -332,26 +330,15 @@ struct SecretinoView: View {
                             RoundedRectangle(cornerRadius: 8)
                                 .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                         )
-                        .fixedSize(horizontal: false, vertical: true) // Permet expansion verticale
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .frame(minHeight: 0) // Permet de commencer à hauteur 0
+            .frame(minHeight: 0)
             .animation(.easeInOut(duration: 0.3), value: outputText.isEmpty)
             
-            // Spacer pour maintenir la hauteur minimale
-            Spacer(minLength: !outputText.isEmpty ? 20 : 100) // Plus grand spacer quand pas de résultat
+            Spacer(minLength: !outputText.isEmpty ? 20 : 100)
         }
         .padding()
-    }
-    
-    private func copyFromClipboard() {
-        let pasteboard = NSPasteboard.general
-        if let clipboardText = pasteboard.string(forType: .string), !clipboardText.isEmpty {
-            inputText = clipboardText
-            showStatusMessage("Texte collé")
-        } else {
-            showErrorOverlay("Presse-papiers vide")
-        }
     }
     
     private func pasteAndProcess() {
@@ -359,13 +346,11 @@ struct SecretinoView: View {
         if let clipboardText = pasteboard.string(forType: .string), !clipboardText.isEmpty {
             inputText = clipboardText
             
-            // Vérifier si passphrase est remplie
             if passphrase.isEmpty {
                 showErrorOverlay("Passphrase requise")
                 return
             }
             
-            // Traitement automatique
             if isEncrypting {
                 encryptText()
             } else {
@@ -404,6 +389,11 @@ struct SecretinoView: View {
     
     private func processText() {
         guard !inputText.isEmpty && !passphrase.isEmpty else { return }
+        
+        // Synchroniser la passphrase avec le gestionnaire global
+        if hotkeyManager.isEnabled && passphrase != hotkeyManager.globalPassphrase {
+            hotkeyManager.globalPassphrase = passphrase
+        }
         
         if isEncrypting {
             encryptText()
@@ -456,7 +446,6 @@ struct SecretinoView: View {
         }
     }
     
-    // Fonction pour afficher un petit texte de statut (succès)
     private func showStatusMessage(_ message: String) {
         statusMessage = message
         
@@ -464,7 +453,6 @@ struct SecretinoView: View {
             showStatus = true
         }
         
-        // Auto-dismiss après 1 seconde
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             withAnimation(.easeInOut(duration: 0.2)) {
                 showStatus = false
@@ -472,7 +460,6 @@ struct SecretinoView: View {
         }
     }
     
-    // Fonction pour afficher l'overlay d'erreur (erreurs uniquement)
     private func showErrorOverlay(_ message: String) {
         overlayMessage = message
         
@@ -480,7 +467,6 @@ struct SecretinoView: View {
             showOverlay = true
         }
         
-        // Auto-dismiss après 1 seconde
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             dismissOverlay()
         }
@@ -494,6 +480,5 @@ struct SecretinoView: View {
 }
 
 #Preview {
-    // Preview sans service
     SecretinoView()
 }

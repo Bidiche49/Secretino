@@ -15,16 +15,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var menu: NSMenu!
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        print("🚀 Démarrage de Secretino...")
-        
-        // Initialiser OpenSSL de manière sécurisée
-        do {
-            try initializeOpenSSL()
-            print("✅ OpenSSL initialisé avec succès")
-        } catch {
-            print("❌ Erreur d'initialisation OpenSSL: \(error)")
-            return
-        }
+        // Initialiser OpenSSL
+        init_openssl()
         
         // Créer l'icône dans la menu bar
         setupMenuBar()
@@ -32,10 +24,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Créer le popover pour l'interface
         setupPopover()
         
-<<<<<<< HEAD
-        // Test rapide de l'intégration crypto (optionnel en debug)
-        #if DEBUG
-=======
         // Créer le menu contextuel
         setupMenu()
         
@@ -43,25 +31,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         PermissionsHelper.shared.checkInitialPermissions()
         
         // Test rapide de l'intégration crypto
->>>>>>> force-push-master2
         testCryptoIntegration()
-        #endif
-    }
-    
-    private func initializeOpenSSL() throws {
-        init_openssl()
-        
-        // Tester si OpenSSL fonctionne
-        var salt = [UInt8](repeating: 0, count: 32)
-        let result = RAND_bytes(&salt, 32)
-        if result != 1 {
-            throw NSError(domain: "SecretinoError", code: 1, userInfo: [NSLocalizedDescriptionKey: "OpenSSL RAND_bytes failed"])
-        }
     }
     
     func applicationWillTerminate(_ notification: Notification) {
         // Désactiver les raccourcis globaux
-        GlobalHotKeyManager.shared.disableHotkeys()
+        GlobalHotkeyManager.shared.disableHotkeys()
         
         // Nettoyer OpenSSL à la fermeture
         cleanup_openssl()
@@ -90,7 +65,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         popover = NSPopover()
         popover.contentSize = NSSize(width: 360, height: 500)
         popover.behavior = .transient
-        // Assure-toi que le nom correspond à ta vue actuelle
         popover.contentViewController = NSHostingController(rootView: SecretinoView())
     }
     
@@ -143,28 +117,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc private func togglePopover() {
-        print("🖱️ Clic sur l'icône Secretino détecté")
-        
         if let button = statusItem.button {
             if popover.isShown {
-                print("🔄 Fermeture du popover")
                 popover.performClose(nil)
             } else {
-                print("🔄 Ouverture du popover")
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: NSRectEdge.minY)
                 
-<<<<<<< HEAD
-                // Activer la fenêtre pour s'assurer qu'elle apparaît
-                NSApp.activate(ignoringOtherApps: true)
-=======
                 // S'assurer que la fenêtre du popover devient key
                 if let popoverWindow = popover.contentViewController?.view.window {
                     popoverWindow.makeKey()
                 }
->>>>>>> force-push-master2
             }
-        } else {
-            print("❌ Erreur: button non trouvé")
         }
     }
     
@@ -216,11 +179,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc private func encryptSelection() {
-        GlobalHotKeyManager.shared.processSelectedText(encrypt: true)
+        GlobalHotkeyManager.shared.processSelectedText(encrypt: true)
     }
     
     @objc private func decryptSelection() {
-        GlobalHotKeyManager.shared.processSelectedText(encrypt: false)
+        GlobalHotkeyManager.shared.processSelectedText(encrypt: false)
     }
     
     private func testCryptoIntegration() {
@@ -229,26 +192,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let testText = "Hello from Secretino!"
         let testPassword = "test123"
         
-        // Test simple avec gestion d'erreur
-        guard let result = swift_encrypt_data(testText, testPassword) else {
-            print("❌ Impossible de créer le résultat de chiffrement")
-            return
-        }
-        
-        defer { free_crypto_result(result) }
-        
-        let cryptoResult = result.pointee
-        
-        if cryptoResult.success == 1 {
-            print("✅ Chiffrement Secretino OK - Taille: \(cryptoResult.length) bytes")
-            print("🎉 Backend crypto opérationnel!")
-        } else {
-            if let errorMsg = cryptoResult.error_message {
-                let errorString = String(cString: errorMsg)
-                print("❌ Erreur chiffrement: \(errorString)")
+        // Test de chiffrement
+        if let result = swift_encrypt_data(testText, testPassword) {
+            let cryptoResult = result.pointee
+            if cryptoResult.success == 1 {
+                print("✅ Chiffrement Secretino OK - Taille: \(cryptoResult.length) bytes")
+                
+                // Encoder en base64
+                if let base64 = swift_base64_encode(cryptoResult.data, Int32(cryptoResult.length)) {
+                    let base64String = String(cString: base64)
+                    print("📝 Base64: \(base64String.prefix(30))...")
+                    
+                    // Test de déchiffrement
+                    if let decodeResult = swift_base64_decode(base64) {
+                        let decodedData = decodeResult.pointee
+                        if decodedData.success == 1 {
+                            if let decryptResult = swift_decrypt_data(decodedData.data, Int32(decodedData.length), testPassword) {
+                                let decryptData = decryptResult.pointee
+                                if decryptData.success == 1 {
+                                    let decryptedText = String(cString: decryptData.data)
+                                    print("🔓 Déchiffrement: '\(decryptedText)'")
+                                    print("🎉 Secretino crypto backend opérationnel!")
+                                } else {
+                                    let errorMsg = String(cString: decryptData.error_message)
+                                    print("❌ Erreur déchiffrement: \(errorMsg)")
+                                }
+                                free_crypto_result(decryptResult)
+                            }
+                        }
+                        free_crypto_result(decodeResult)
+                    }
+                    free(base64)
+                }
             } else {
-                print("❌ Erreur chiffrement inconnue")
+                let errorMsg = String(cString: cryptoResult.error_message)
+                print("❌ Erreur chiffrement: \(errorMsg)")
             }
+            free_crypto_result(result)
         }
     }
 }
