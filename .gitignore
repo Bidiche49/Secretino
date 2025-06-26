@@ -1,1 +1,25 @@
+# Xcode
+*.xcworkspace
+*.xcuserstate
+*.xcuserdata
+xcuser*
+DerivedData/
+build/
+
+# macOS
 .DS_Store
+
+# SwiftPM
+.swiftpm/
+.build/
+
+# CocoaPods
+Pods/
+
+# Carthage
+Carthage/Build/
+
+# Certificates
+*.cer
+*.p12
+*.mobileprovision

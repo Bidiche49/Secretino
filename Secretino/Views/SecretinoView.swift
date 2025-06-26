@@ -2,7 +2,7 @@
 //  SecretinoView.swift
 //  Secretino
 //
-//  Interface principale de Secretino avec raccourcis clavier
+//  Interface principale de Secretino avec raccourcis clavier - VERSION COMPLÈTE
 //
 
 import SwiftUI
@@ -120,13 +120,13 @@ struct SecretinoView: View {
                     .onChange(of: passphrase) { newValue in
                         // Synchroniser avec le gestionnaire global si les raccourcis sont activés
                         if hotkeyManager.isEnabled && !newValue.isEmpty {
-                            hotkeyManager.globalPassphrase = newValue
+                            hotkeyManager.temporaryPassphrase = newValue
                         }
                     }
                     .onAppear {
                         // Charger la passphrase globale si elle existe
-                        if !hotkeyManager.globalPassphrase.isEmpty {
-                            passphrase = hotkeyManager.globalPassphrase
+                        if !hotkeyManager.temporaryPassphrase.isEmpty {
+                            passphrase = hotkeyManager.temporaryPassphrase
                         }
                     }
             }
@@ -254,7 +254,7 @@ struct SecretinoView: View {
             .frame(height: 10)
             
             // Info sur les raccourcis globaux
-            if hotkeyManager.isEnabled && !hotkeyManager.globalPassphrase.isEmpty {
+            if hotkeyManager.isEnabled && !hotkeyManager.temporaryPassphrase.isEmpty {
                 VStack(spacing: 4) {
                     Text("Raccourcis globaux actifs")
                         .font(.caption2)
@@ -263,7 +263,7 @@ struct SecretinoView: View {
                     
                     HStack(spacing: 20) {
                         HStack(spacing: 4) {
-                            Text("⌘⌥E")
+                            Text("⌃⇧E")
                                 .font(.caption2)
                                 .fontWeight(.semibold)
                                 .padding(.horizontal, 6)
@@ -277,7 +277,7 @@ struct SecretinoView: View {
                         }
                         
                         HStack(spacing: 4) {
-                            Text("⌘⌥D")
+                            Text("⌃⇧D")
                                 .font(.caption2)
                                 .fontWeight(.semibold)
                                 .padding(.horizontal, 6)
@@ -391,8 +391,8 @@ struct SecretinoView: View {
         guard !inputText.isEmpty && !passphrase.isEmpty else { return }
         
         // Synchroniser la passphrase avec le gestionnaire global
-        if hotkeyManager.isEnabled && passphrase != hotkeyManager.globalPassphrase {
-            hotkeyManager.globalPassphrase = passphrase
+        if hotkeyManager.isEnabled && passphrase != hotkeyManager.temporaryPassphrase {
+            hotkeyManager.temporaryPassphrase = passphrase
         }
         
         if isEncrypting {
@@ -404,11 +404,12 @@ struct SecretinoView: View {
     
     private func encryptText() {
         if let result = swift_encrypt_data(inputText, passphrase) {
+            defer { free_crypto_result(result) }
             let cryptoResult = result.pointee
             if cryptoResult.success == 1 {
                 if let base64 = swift_base64_encode(cryptoResult.data, Int32(cryptoResult.length)) {
+                    defer { free(base64) } // ✅ Gestion mémoire correcte
                     outputText = String(cString: base64)
-                    free(base64)
                     showStatusMessage("Texte chiffré avec succès")
                 } else {
                     showErrorOverlay("Erreur encodage Base64")
@@ -417,15 +418,16 @@ struct SecretinoView: View {
                 let errorMsg = String(cString: cryptoResult.error_message)
                 showErrorOverlay("Erreur: \(errorMsg)")
             }
-            free_crypto_result(result)
         }
     }
     
     private func decryptText() {
         if let decodeResult = swift_base64_decode(inputText) {
+            defer { free_crypto_result(decodeResult) }
             let decodedData = decodeResult.pointee
             if decodedData.success == 1 {
                 if let decryptResult = swift_decrypt_data(decodedData.data, Int32(decodedData.length), passphrase) {
+                    defer { free_crypto_result(decryptResult) }
                     let decryptData = decryptResult.pointee
                     if decryptData.success == 1 {
                         outputText = String(cString: decryptData.data)
@@ -434,7 +436,6 @@ struct SecretinoView: View {
                         let errorMsg = String(cString: decryptData.error_message)
                         showErrorOverlay("Déchiffrement échoué: \(errorMsg)")
                     }
-                    free_crypto_result(decryptResult)
                 } else {
                     showErrorOverlay("Erreur lors du déchiffrement")
                 }
@@ -442,7 +443,6 @@ struct SecretinoView: View {
                 let errorMsg = String(cString: decodedData.error_message)
                 showErrorOverlay("Base64 invalide: \(errorMsg)")
             }
-            free_crypto_result(decodeResult)
         }
     }
     

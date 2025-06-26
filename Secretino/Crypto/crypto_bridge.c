@@ -37,7 +37,7 @@ static void military_grade_zero(void *ptr, size_t len) {
 
 // Fonction pour dériver une clé à partir d'une passphrase
 static int derive_key(const char *passphrase, const unsigned char *salt, unsigned char *key) {
-    if (PKCS5_PBKDF2_HMAC(passphrase, strlen(passphrase), salt, SALT_SIZE,
+    if (PKCS5_PBKDF2_HMAC(passphrase, (int)strlen(passphrase), salt, SALT_SIZE,
                         ITERATIONS, EVP_sha256(), KEY_SIZE, key) != 1) {
         return 0;
     }
@@ -62,7 +62,7 @@ CryptoResult* swift_encrypt_data(const char *plaintext, const char *passphrase) 
     
     EVP_CIPHER_CTX *ctx;
     int len;
-    int plaintext_len = strlen(plaintext);
+    int plaintext_len = (int)strlen(plaintext);
     unsigned char salt[SALT_SIZE];
     unsigned char key[KEY_SIZE];
     unsigned char iv[IV_SIZE];
@@ -300,7 +300,7 @@ CryptoResult* swift_base64_decode(const char *input) {
     result->error_message[0] = '\0';  // Initialiser comme string vide
 
     BIO *bio, *b64;
-    int decode_len = strlen(input);
+    int decode_len = (int)strlen(input);
     result->data = malloc(decode_len);
     
     if (!result->data) {
