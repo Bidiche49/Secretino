@@ -177,7 +177,7 @@ class GlobalHotkeyManager: ObservableObject {
         if let passphrase = sessionPassphrase {
             // Effacement sécurisé de la mémoire - méthode corrigée pour Swift
             var mutableData = Data(passphrase.utf8)
-            mutableData.withUnsafeMutableBytes { bytes in
+            _ = mutableData.withUnsafeMutableBytes { bytes in
                 memset_s(bytes.baseAddress, bytes.count, 0, bytes.count)
             }
         }
@@ -266,7 +266,7 @@ class GlobalHotkeyManager: ObservableObject {
         modifiers: UInt32,
         hotkeyRef: inout EventHotKeyRef?
     ) -> Bool {
-        var hotkeyID = EventHotKeyID(signature: fourCharCode("SECR"), id: id)
+        let hotkeyID = EventHotKeyID(signature: fourCharCode("SECR"), id: id)
         
         let status = RegisterEventHotKey(
             keyCode,

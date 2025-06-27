@@ -13,6 +13,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var settingsWindow: NSWindow?
+    private var settingsHostingController: NSHostingController<SettingsView>?
     private var menu: NSMenu!
     
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -413,6 +414,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     @objc private func openSettings() {
         if settingsWindow == nil {
+            // Créer le hosting controller une seule fois
+            settingsHostingController = NSHostingController(rootView: SettingsView())
+            
             settingsWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 400, height: 720),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -421,9 +425,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             )
             settingsWindow?.title = "Préférences Secretino"
             settingsWindow?.center()
-            settingsWindow?.contentView = NSHostingView(rootView: SettingsView())
+            settingsWindow?.contentViewController = settingsHostingController
             settingsWindow?.minSize = NSSize(width: 400, height: 720)
             settingsWindow?.maxSize = NSSize(width: 600, height: 800)
+            
+            // Observer la fermeture de la fenêtre
+            settingsWindow?.delegate = self
         }
         
         settingsWindow?.makeKeyAndOrderFront(nil)
@@ -552,6 +559,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let errorMsg = String(cString: cryptoResult.error_message)
                 print("❌ Erreur chiffrement: \(errorMsg)")
             }
+        }
+    }
+}
+
+// MARK: - NSWindowDelegate
+extension AppDelegate: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        if notification.object as? NSWindow === settingsWindow {
+            // Ne pas détruire la fenêtre, juste la cacher
+            // Ceci évite le crash lors de la réouverture
         }
     }
 }

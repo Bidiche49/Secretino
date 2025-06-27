@@ -94,7 +94,7 @@ class DiagnosticHelper {
         
         // Tester l'enregistrement d'un raccourci temporaire
         var hotkeyRef: EventHotKeyRef?
-        var hotkeyID = EventHotKeyID(signature: fourCharCode("TEST"), id: 999)
+        let hotkeyID = EventHotKeyID(signature: fourCharCode("TEST"), id: 999)
         
         let hotkeyStatus = RegisterEventHotKey(
             UInt32(kVK_F19), // Touche peu utilisée

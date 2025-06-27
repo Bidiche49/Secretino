@@ -40,20 +40,36 @@ class SecureKeychainManager {
         let hash = SHA256.hash(data: passphraseData)
         let hashString = hash.compactMap { String(format: "%02x", $0) }.joined()
         
-        // Créer l'access control avec biométrie obligatoire
-        guard let accessControl = SecAccessControlCreateWithFlags(
-            nil,
-            kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-            [.biometryCurrentSet, .applicationPassword], // Biométrie + mot de passe app si nécessaire
-            nil
-        ) else {
-            throw KeychainError.biometryNotAvailable
-        }
-        
         // Supprimer l'ancienne entrée si elle existe
         try? deleteGlobalPassphrase()
         
-        // Stocker la passphrase
+        // Vérifier si l'app est en mode debug/development
+        #if DEBUG
+        print("⚠️ Mode Debug - Stockage sans biométrie pour le développement")
+        // En mode debug, stocker sans biométrie pour faciliter les tests
+        let passphraseQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: KeychainKeys.service,
+            kSecAttrAccount as String: KeychainKeys.globalPassphraseKey,
+            kSecValueData as String: passphraseData,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        ]
+        #else
+        // En production, utiliser la biométrie
+        // Créer l'access control avec biométrie obligatoire
+        var error: Unmanaged<CFError>?
+        guard let accessControl = SecAccessControlCreateWithFlags(
+            kCFAllocatorDefault,
+            kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            [.biometryCurrentSet],
+            &error
+        ) else {
+            if let error = error?.takeRetainedValue() {
+                print("❌ Erreur création access control: \(error)")
+            }
+            throw KeychainError.biometryNotAvailable
+        }
+        
         let passphraseQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: KeychainKeys.service,
@@ -61,10 +77,26 @@ class SecureKeychainManager {
             kSecValueData as String: passphraseData,
             kSecAttrAccessControl as String: accessControl
         ]
+        #endif
         
         let passphraseStatus = SecItemAdd(passphraseQuery as CFDictionary, nil)
         
-        if passphraseStatus != errSecSuccess {
+        if passphraseStatus == errSecDuplicateItem {
+            // Si l'élément existe déjà, le supprimer et réessayer
+            try? deleteGlobalPassphrase()
+            let retryStatus = SecItemAdd(passphraseQuery as CFDictionary, nil)
+            if retryStatus != errSecSuccess {
+                print("❌ Erreur Keychain retry: \(retryStatus)")
+                throw KeychainError.unexpectedError(retryStatus)
+            }
+        } else if passphraseStatus != errSecSuccess {
+            print("❌ Erreur Keychain: \(passphraseStatus)")
+            // Afficher plus d'informations sur l'erreur
+            if passphraseStatus == -34018 {
+                print("❌ Erreur -34018: Vérifiez les entitlements et le profil de provisioning")
+                print("   - Bundle ID: \(Bundle.main.bundleIdentifier ?? "inconnu")")
+                print("   - Keychain access groups: \(getKeychainAccessGroups())")
+            }
             throw KeychainError.unexpectedError(passphraseStatus)
         }
         
@@ -78,7 +110,7 @@ class SecureKeychainManager {
         ]
         
         let hashStatus = SecItemAdd(hashQuery as CFDictionary, nil)
-        if hashStatus != errSecSuccess {
+        if hashStatus != errSecSuccess && hashStatus != errSecDuplicateItem {
             // Si le hash échoue, nettoyer la passphrase aussi
             try? deleteGlobalPassphrase()
             throw KeychainError.unexpectedError(hashStatus)
@@ -111,13 +143,14 @@ class SecureKeychainManager {
         case errSecItemNotFound:
             throw KeychainError.itemNotFound
             
-        case OSStatus(-128): // errSecUserCancel value
+        case -128: // errSecUserCancel
             throw KeychainError.userCancel
             
         case errSecAuthFailed:
             throw KeychainError.authenticationFailed
             
         default:
+            print("❌ Erreur Keychain load: \(status)")
             throw KeychainError.unexpectedError(status)
         }
     }
@@ -153,7 +186,7 @@ class SecureKeychainManager {
             kSecAttrAccount as String: KeychainKeys.passphraseHashKey
         ]
         
-        let hashStatus = SecItemDelete(hashQuery as CFDictionary)
+        _ = SecItemDelete(hashQuery as CFDictionary)
         
         // Nettoyer aussi les anciennes préférences UserDefaults si elles existent
         UserDefaults.standard.removeObject(forKey: "secretino_has_passphrase")
@@ -194,6 +227,19 @@ class SecureKeychainManager {
         UserDefaults.standard.synchronize()
         print("🧹 Nettoyage complet des données sécurisées")
     }
+    
+    // MARK: - Debug Helpers
+    
+    /// Obtient les groupes d'accès Keychain pour debug
+    private func getKeychainAccessGroups() -> [String] {
+        #if DEBUG
+        // En debug, afficher les groupes d'accès
+        if let groups = Bundle.main.object(forInfoDictionaryKey: "keychain-access-groups") as? [String] {
+            return groups
+        }
+        #endif
+        return []
+    }
 }
 
 // MARK: - Error Handling Extensions
@@ -217,7 +263,14 @@ extension SecureKeychainManager {
         case .authenticationFailed:
             return "Échec de l'authentification"
         case .unexpectedError(let status):
-            return "Erreur Keychain: \(status)"
+            switch status {
+            case -34018:
+                return "Erreur de configuration. Vérifiez les entitlements de l'app dans Xcode."
+            case -25308:
+                return "Erreur d'autorisation. Redémarrez l'app."
+            default:
+                return "Erreur Keychain: \(status)"
+            }
         }
     }
 }

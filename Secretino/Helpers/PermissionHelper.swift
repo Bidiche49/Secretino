@@ -168,12 +168,8 @@ class PermissionsHelper {
         
         print("🔓 Demande d'accessibilité déclenchée, statut: \(trusted)")
         
-        if !trusted {
-            // Ouvrir les préférences système après un délai
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                self.openAccessibilityPreferences()
-            }
-        }
+        // Ne PAS ouvrir automatiquement les préférences
+        // L'utilisateur peut cliquer sur le bouton dans la fenêtre système
     }
     
     /// Surveille les changements de permissions après la demande

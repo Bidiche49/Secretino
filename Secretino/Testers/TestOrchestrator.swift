@@ -117,7 +117,7 @@ class TestOrchestrator {
         
         // Test 2: Keychain de base
         let keychainTester = KeychainTester.shared
-        keychainTester.testSecretinoKeychain()
+        _ = keychainTester.testSecretinoKeychain()
         let hasKeychain = SecureKeychainManager.shared.isBiometryAvailable()
         results.append(TestResult(
             hasKeychain ? .passed : .warning,
