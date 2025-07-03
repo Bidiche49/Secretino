@@ -86,7 +86,7 @@ class ConfigurationManager {
     
     func loadGlobalPassphrase() -> String? {
         // Temporaire : lecture depuis UserDefaults
-        // TODO: Migrer vers Keychain
+        // TODO: Migrer vers Keychaindisc
         guard let data = UserDefaults.standard.data(forKey: Keys.tempPassphrase),
               let passphrase = String(data: data, encoding: .utf8) else {
             return nil

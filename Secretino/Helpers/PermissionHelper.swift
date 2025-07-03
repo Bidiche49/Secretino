@@ -52,9 +52,9 @@ class PermissionsHelper {
         // Marquer comme première exécution
         UserDefaults.standard.set(true, forKey: UserDefaultsKeys.hasShownWelcome)
         
-        // Afficher le message de bienvenue après un court délai
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            self.showWelcomeMessage()
+        // Afficher le message de bienvenue et demander les permissions immédiatement
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.showWelcomeAndRequestPermissions()
         }
     }
     
@@ -85,8 +85,8 @@ class PermissionsHelper {
         }
     }
     
-    /// Affiche le message de bienvenue avec demande de permissions
-    private func showWelcomeMessage() {
+    /// Affiche le message de bienvenue et demande les permissions
+    private func showWelcomeAndRequestPermissions() {
         DispatchQueue.main.async {
             let alert = NSAlert()
             alert.messageText = "Bienvenue dans Secretino! 🔐"
@@ -103,21 +103,25 @@ class PermissionsHelper {
             1. D'une passphrase sécurisée (avec Touch ID/Face ID)
             2. De l'autorisation d'accessibilité
             
-            Voulez-vous configurer Secretino maintenant ?
+            Voulez-vous configurer cette autorisation maintenant ?
             """
             alert.alertStyle = .informational
-            alert.addButton(withTitle: "Configurer maintenant")
+            alert.addButton(withTitle: "Autoriser maintenant")
             alert.addButton(withTitle: "Plus tard")
             
             let response = alert.runModal()
             if response == .alertFirstButtonReturn {
-                self.startSetupProcess()
-            } else {
-                print("ℹ️ Configuration reportée par l'utilisateur")
+                // Déclencher directement la demande de permissions
+                self.triggerAccessibilityRequest()
+                
+                // Ouvrir les préférences après un court délai
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    self.openSettingsForConfiguration()
+                }
             }
         }
     }
-    
+
     /// Démarre le processus de configuration complète
     private func startSetupProcess() {
         print("🚀 Démarrage du processus de configuration...")

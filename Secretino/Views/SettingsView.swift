@@ -2,7 +2,7 @@
 //  SettingsView.swift
 //  Secretino
 //
-//  Vue de configuration sécurisée pour les raccourcis globaux
+//  Vue de configuration sécurisée pour les raccourcis globaux - CORRIGÉE
 //
 
 import SwiftUI
@@ -20,256 +20,261 @@ struct SettingsView: View {
     @State private var isConfiguring: Bool = false
     
     var body: some View {
-        VStack(spacing: 20) {
-            // Header
-            VStack(spacing: 8) {
-                Image(systemName: "keyboard.badge.ellipsis")
-                    .font(.system(size: 40))
-                    .foregroundColor(.blue)
-                
-                Text("Raccourcis Globaux")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                
-                Text("Chiffrez/déchiffrez dans n'importe quelle app")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            Divider()
-            
-            // État des prérequis
-            VStack(spacing: 12) {
-                Text("Prérequis")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                
-                // Biométrie
-                HStack {
-                    Image(systemName: biometryAvailable ? "checkmark.circle.fill" : "xmark.circle.fill")
-                        .foregroundColor(biometryAvailable ? .green : .red)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Touch ID / Face ID")
-                            .font(.subheadline)
-                        Text(biometryAvailable ? "Disponible" : "Non disponible - requis pour la sécurité")
+        // ✅ CORRECTION: Conteneur avec taille fixe
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Image(systemName: "keyboard.badge.ellipsis")
+                            .font(.system(size: 40))
+                            .foregroundColor(.blue)
+                        
+                        Text("Raccourcis Globaux")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        Text("Chiffrez/déchiffrez dans n'importe quelle app")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    .padding(.top, 20)
                     
-                    Spacer()
-                }
-                .padding()
-                .background(biometryAvailable ? Color.green.opacity(0.1) : Color.red.opacity(0.1))
-                .cornerRadius(8)
-                
-                // Permissions d'accessibilité
-                HStack {
-                    Image(systemName: permissionStatus ? "checkmark.circle.fill" : "xmark.circle.fill")
-                        .foregroundColor(permissionStatus ? .green : .orange)
+                    Divider()
                     
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Accessibilité")
-                            .font(.subheadline)
-                        Text(permissionStatus ? "Autorisé" : "Autorisation requise pour les raccourcis")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Spacer()
-                    
-                    if !permissionStatus {
-                        Button("Autoriser") {
-                            PermissionsHelper.shared.triggerAccessibilityRequest()
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                }
-                .padding()
-                .background(permissionStatus ? Color.green.opacity(0.1) : Color.orange.opacity(0.1))
-                .cornerRadius(8)
-            }
-            
-            Divider()
-            
-            // Configuration de la passphrase
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Passphrase Sécurisée")
-                    .font(.headline)
-                
-                if hotkeyManager.hasConfiguredPassphrase {
+                    // État des prérequis
                     VStack(spacing: 12) {
+                        Text("Prérequis")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        // Biométrie
                         HStack {
-                            Image(systemName: "lock.shield.fill")
-                                .foregroundColor(.green)
-                            Text("Passphrase configurée et sécurisée")
-                                .foregroundColor(.secondary)
+                            Image(systemName: biometryAvailable ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor(biometryAvailable ? .green : .red)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Touch ID / Face ID")
+                                    .font(.subheadline)
+                                Text(biometryAvailable ? "Disponible" : "Non disponible - requis pour la sécurité")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
                             Spacer()
                         }
-                        .padding()
-                        .background(Color.green.opacity(0.1))
+                        .padding(12)
+                        .background(biometryAvailable ? Color.green.opacity(0.1) : Color.red.opacity(0.1))
                         .cornerRadius(8)
                         
-                        HStack(spacing: 12) {
-                            Button("Modifier") {
-                                modifyPassphrase()
-                            }
-                            .buttonStyle(.bordered)
+                        // Permissions d'accessibilité
+                        HStack {
+                            Image(systemName: permissionStatus ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor(permissionStatus ? .green : .orange)
                             
-                            Button("Supprimer") {
-                                deletePassphrase()
-                            }
-                            .buttonStyle(.bordered)
-                            .foregroundColor(.red)
-                        }
-                    }
-                } else {
-                    VStack(spacing: 12) {
-                        if !biometryAvailable {
-                            HStack {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundColor(.orange)
-                                Text("Touch ID/Face ID requis pour sécuriser la passphrase")
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Accessibilité")
+                                    .font(.subheadline)
+                                Text(permissionStatus ? "Autorisé" : "Autorisation requise pour les raccourcis")
                                     .font(.caption)
-                                    .foregroundColor(.orange)
+                                    .foregroundColor(.secondary)
                             }
-                            .padding()
-                            .background(Color.orange.opacity(0.1))
-                            .cornerRadius(8)
-                        }
-                        
-                        VStack(spacing: 8) {
-                            SecureField("Nouvelle passphrase (min 8 caractères)", text: $globalPassphrase)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .disabled(!biometryAvailable)
                             
-                            SecureField("Confirmer passphrase", text: $confirmPassphrase)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .disabled(!biometryAvailable)
+                            Spacer()
                             
-                            Button(action: configurePassphrase) {
-                                if isConfiguring {
-                                    HStack {
-                                        ProgressView()
-                                            .scaleEffect(0.8)
-                                        Text("Configuration...")
-                                    }
-                                } else {
-                                    Text("Configurer passphrase sécurisée")
-                                }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(!biometryAvailable || globalPassphrase.isEmpty || confirmPassphrase.isEmpty || isConfiguring)
-                        }
-                        
-                        Text("⚠️ La passphrase sera chiffrée et stockée dans le Keychain avec protection biométrique")
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                            .multilineTextAlignment(.center)
-                    }
-                }
-            }
-            
-            Divider()
-            
-            // Activation des raccourcis
-            VStack(alignment: .leading, spacing: 12) {
-                Toggle("Activer les raccourcis globaux", isOn: .constant(hotkeyManager.isEnabled))
-                    .disabled(true) // Read-only, géré automatiquement
-                
-                if hotkeyManager.canEnable {
-                    VStack(spacing: 8) {
-                        if hotkeyManager.isEnabled {
-                            HStack {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                Text("Raccourcis actifs")
-                                    .foregroundColor(.green)
-                                Spacer()
-                                Button("Désactiver") {
-                                    hotkeyManager.disableHotkeys()
+                            if !permissionStatus {
+                                Button("Autoriser") {
+                                    PermissionsHelper.shared.triggerAccessibilityRequest()
                                 }
                                 .buttonStyle(.bordered)
                             }
-                            .padding()
-                            .background(Color.green.opacity(0.1))
-                            .cornerRadius(8)
-                            
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label("⌃⇧E : Chiffrer la sélection", systemImage: "lock.fill")
-                                    .font(.system(.body, design: .monospaced))
-                                Label("⌃⇧D : Déchiffrer la sélection", systemImage: "lock.open.fill")
-                                    .font(.system(.body, design: .monospaced))
+                        }
+                        .padding(12)
+                        .background(permissionStatus ? Color.green.opacity(0.1) : Color.orange.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                    
+                    Divider()
+                    
+                    // Configuration de la passphrase
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Passphrase Sécurisée")
+                            .font(.headline)
+                        
+                        if hotkeyManager.hasConfiguredPassphrase {
+                            VStack(spacing: 12) {
+                                HStack {
+                                    Image(systemName: "lock.shield.fill")
+                                        .foregroundColor(.green)
+                                    Text("Passphrase configurée et sécurisée")
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                }
+                                .padding(12)
+                                .background(Color.green.opacity(0.1))
+                                .cornerRadius(8)
+                                
+                                HStack(spacing: 12) {
+                                    Button("Modifier") {
+                                        modifyPassphrase()
+                                    }
+                                    .buttonStyle(.bordered)
+                                    
+                                    Button("Supprimer") {
+                                        deletePassphrase()
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .foregroundColor(.red)
+                                }
                             }
-                            .padding()
-                            .background(Color.blue.opacity(0.1))
-                            .cornerRadius(8)
                         } else {
-                            Button("Activer les raccourcis") {
-                                hotkeyManager.requestPermissionsAndSetup()
+                            VStack(spacing: 12) {
+                                if !biometryAvailable {
+                                    HStack {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(.orange)
+                                        Text("Touch ID/Face ID requis pour sécuriser la passphrase")
+                                            .font(.caption)
+                                            .foregroundColor(.orange)
+                                    }
+                                    .padding(12)
+                                    .background(Color.orange.opacity(0.1))
+                                    .cornerRadius(8)
+                                }
+                                
+                                VStack(spacing: 8) {
+                                    SecureField("Nouvelle passphrase (min 8 caractères)", text: $globalPassphrase)
+                                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                                        .disabled(!biometryAvailable)
+                                    
+                                    SecureField("Confirmer passphrase", text: $confirmPassphrase)
+                                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                                        .disabled(!biometryAvailable)
+                                    
+                                    Button(action: configurePassphrase) {
+                                        if isConfiguring {
+                                            HStack {
+                                                ProgressView()
+                                                    .scaleEffect(0.8)
+                                                Text("Configuration...")
+                                            }
+                                        } else {
+                                            Text("Configurer passphrase sécurisée")
+                                        }
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .disabled(!biometryAvailable || globalPassphrase.isEmpty || confirmPassphrase.isEmpty || isConfiguring)
+                                }
+                                
+                                Text("⚠️ La passphrase sera chiffrée et stockée dans le Keychain avec protection biométrique")
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                                    .multilineTextAlignment(.center)
                             }
-                            .buttonStyle(.borderedProminent)
                         }
                     }
-                } else {
-                    Text("Configurez d'abord la passphrase et autorisez l'accessibilité")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding()
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
-                }
-            }
-            
-            Divider()
-            
-            // Instructions d'utilisation
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Mode d'emploi")
-                    .font(.headline)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("1. Sélectionnez du texte dans n'importe quelle application")
-                    Text("2. Appuyez sur ⌃⇧E pour chiffrer ou ⌃⇧D pour déchiffrer")
-                    Text("3. Authentifiez-vous avec Touch ID/Face ID au premier usage")
-                    Text("4. Le texte est automatiquement remplacé")
-                    Text("5. Session active pendant 10 minutes puis ré-authentification")
-                }
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .padding()
-                .background(Color.blue.opacity(0.05))
-                .cornerRadius(8)
-            }
-            
-            // Zone de danger
-            if hotkeyManager.hasConfiguredPassphrase {
-                Divider()
-                
-                VStack(spacing: 8) {
-                    Text("Zone de danger")
-                        .font(.headline)
-                        .foregroundColor(.red)
                     
-                    Button("Réinitialiser complètement Secretino") {
-                        resetApplication()
+                    Divider()
+                    
+                    // Activation des raccourcis
+                    VStack(alignment: .leading, spacing: 12) {
+                        if hotkeyManager.canEnable {
+                            VStack(spacing: 8) {
+                                if hotkeyManager.isEnabled {
+                                    HStack {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.green)
+                                        Text("Raccourcis actifs")
+                                            .foregroundColor(.green)
+                                        Spacer()
+                                        Button("Désactiver") {
+                                            hotkeyManager.disableHotkeys()
+                                        }
+                                        .buttonStyle(.bordered)
+                                    }
+                                    .padding(12)
+                                    .background(Color.green.opacity(0.1))
+                                    .cornerRadius(8)
+                                    
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Label("⌃⇧E : Chiffrer la sélection", systemImage: "lock.fill")
+                                            .font(.system(.body, design: .monospaced))
+                                        Label("⌃⇧D : Déchiffrer la sélection", systemImage: "lock.open.fill")
+                                            .font(.system(.body, design: .monospaced))
+                                    }
+                                    .padding(12)
+                                    .background(Color.blue.opacity(0.1))
+                                    .cornerRadius(8)
+                                } else {
+                                    Button("Activer les raccourcis") {
+                                        hotkeyManager.requestPermissionsAndSetup()
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                }
+                            }
+                        } else {
+                            Text("Configurez d'abord la passphrase et autorisez l'accessibilité")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(12)
+                                .background(Color.gray.opacity(0.1))
+                                .cornerRadius(8)
+                        }
                     }
-                    .buttonStyle(.bordered)
-                    .foregroundColor(.red)
                     
-                    Text("Supprime toutes les données, passphrases et préférences")
+                    Divider()
+                    
+                    // Instructions d'utilisation
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Mode d'emploi")
+                            .font(.headline)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("1. Sélectionnez du texte dans n'importe quelle application")
+                            Text("2. Appuyez sur ⌃⇧E pour chiffrer ou ⌃⇧D pour déchiffrer")
+                            Text("3. Authentifiez-vous avec Touch ID/Face ID au premier usage")
+                            Text("4. Le texte est automatiquement remplacé")
+                            Text("5. Session active pendant 10 minutes puis ré-authentification")
+                        }
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .padding(12)
+                        .background(Color.blue.opacity(0.05))
+                        .cornerRadius(8)
+                    }
+                    
+                    // Zone de danger
+                    if hotkeyManager.hasConfiguredPassphrase {
+                        Divider()
+                        
+                        VStack(spacing: 8) {
+                            Text("Zone de danger")
+                                .font(.headline)
+                                .foregroundColor(.red)
+                            
+                            Button("Réinitialiser complètement Secretino") {
+                                resetApplication()
+                            }
+                            .buttonStyle(.bordered)
+                            .foregroundColor(.red)
+                            
+                            Text("Supprime toutes les données, passphrases et préférences")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(12)
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                    
+                    // Espace en bas
+                    Spacer(minLength: 20)
                 }
-                .padding()
-                .background(Color.red.opacity(0.1))
-                .cornerRadius(8)
+                .padding(20)
             }
-            
-            Spacer(minLength: 20)
         }
-        .padding()
-        .frame(width: 400, height: 720)
+        // ✅ CORRECTION: Taille fixe pour éviter les problèmes de redimensionnement
+        .frame(width: 450, height: permissionStatus ? 840 : 750)
         .alert(alertTitle, isPresented: $showAlert) {
             Button("OK") { }
         } message: {
@@ -405,4 +410,5 @@ struct SettingsView: View {
 
 #Preview {
     SettingsView()
+        .frame(width: 450, height: 750)
 }

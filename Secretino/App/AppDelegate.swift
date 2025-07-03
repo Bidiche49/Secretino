@@ -56,6 +56,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Nettoyer les observers
         NotificationCenter.default.removeObserver(self)
+        
+        // ✅ AJOUT: Nettoyer proprement les fenêtres
+        cleanupWindows()
     }
     
     private func performInitialSetup() {
@@ -297,40 +300,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
     }
     
-    // MARK: - Actions Debug
-//    
-//    /// Ajouter cette méthode à votre AppDelegate pour lancer les tests
-//    @objc func runAutomatedTests() {
-//        TestOrchestrator.shared.runAllTests()
-//    }
-//    
-//    @objc func runQuickValidation() {
-//        TestOrchestrator.shared.runQuickValidation()
-//    }
-//    
-//    @objc func runSpecificTest() {
-//        // Demander quel test lancer
-//        let alert = NSAlert()
-//        alert.messageText = "Quel test lancer ?"
-//        alert.informativeText = "Tests disponibles: Crypto, Keychain, Migration, Permissions, Raccourcis, Intégration"
-//        alert.addButton(withTitle: "Crypto")
-//        alert.addButton(withTitle: "Keychain")
-//        alert.addButton(withTitle: "Raccourcis")
-//        alert.addButton(withTitle: "Annuler")
-//        
-//        let response = alert.runModal()
-//        switch response {
-//        case .alertFirstButtonReturn:
-//            TestOrchestrator.shared.runSpecificTest("crypto")
-//        case .alertSecondButtonReturn:
-//            TestOrchestrator.shared.runSpecificTest("keychain")
-//        case .alertThirdButtonReturn:
-//            TestOrchestrator.shared.runSpecificTest("raccourcis")
-//        default:
-//            break
-//        }
-//    }
-//    
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
         guard let event = NSApp.currentEvent else { return }
         
@@ -412,29 +381,59 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         openSettings()
     }
     
+    // ✅ CORRECTION PRINCIPALE: Gestion sécurisée des préférences
     @objc private func openSettings() {
-        if settingsWindow == nil {
-            // Créer le hosting controller une seule fois
-            settingsHostingController = NSHostingController(rootView: SettingsView())
-            
-            settingsWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 400, height: 720),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                backing: .buffered,
-                defer: false
-            )
-            settingsWindow?.title = "Préférences Secretino"
-            settingsWindow?.center()
-            settingsWindow?.contentViewController = settingsHostingController
-            settingsWindow?.minSize = NSSize(width: 400, height: 720)
-            settingsWindow?.maxSize = NSSize(width: 600, height: 800)
-            
-            // Observer la fermeture de la fenêtre
-            settingsWindow?.delegate = self
+        print("🔧 Ouverture des préférences...")
+        
+        // Si une fenêtre existe déjà, la ramener au premier plan
+        if let existingWindow = settingsWindow {
+            print("🔄 Fenêtre existante trouvée - mise au premier plan")
+            existingWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
         }
         
+        // Créer le hosting controller AVANT la fenêtre
+        settingsHostingController = NSHostingController(rootView: SettingsView())
+        
+        // ✅ TAILLE FIXE pour éviter les problèmes de redimensionnement
+        let windowSize = NSSize(width: 450, height: 750)
+        let windowRect = NSRect(origin: .zero, size: windowSize)
+        
+        settingsWindow = NSWindow(
+            contentRect: windowRect,
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        
+        // Configuration de la fenêtre
+        settingsWindow?.title = "Préférences Secretino"
+        settingsWindow?.contentViewController = settingsHostingController
+        settingsWindow?.isReleasedWhenClosed = false // ✅ CRITIQUE: Éviter la libération automatique
+        settingsWindow?.delegate = self
+        
+        // ✅ TAILLE FIXE pour éviter les problèmes d'affichage
+        settingsWindow?.minSize = windowSize
+        settingsWindow?.maxSize = windowSize
+        
+        // Centrer et afficher
+        settingsWindow?.center()
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        
+        print("✅ Préférences ouvertes avec succès - Taille: \(windowSize)")
+    }
+    
+    // ✅ AJOUT: Méthode de nettoyage des fenêtres
+    private func cleanupWindows() {
+        if let window = settingsWindow {
+            window.orderOut(nil)
+            window.delegate = nil // ✅ Supprimer le delegate
+        }
+        // ✅ Libérer les références seulement à la fermeture de l'app
+        settingsWindow = nil
+        settingsHostingController = nil
     }
     
     @objc private func showAbout() {
@@ -539,7 +538,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         defer { free_crypto_result(decodeResult) }
                         let decodedData = decodeResult.pointee
                         if decodedData.success == 1 {
-                            if let decryptResult = swift_decrypt_data(decodedData.data, Int32(decodedData.length), testPassword) {
+                            if let decryptResult = swift_decrypt_data(
+                                decodedData.data,
+                                Int32(decodedData.length),
+                                testPassword
+                            ) {
                                 defer { free_crypto_result(decryptResult) }
                                 let decryptData = decryptResult.pointee
                                 if decryptData.success == 1 {
@@ -553,7 +556,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                             }
                         }
                     }
-                    // ❌ SUPPRIMÉ : free(base64) - déjà géré par defer
                 }
             } else {
                 let errorMsg = String(cString: cryptoResult.error_message)
@@ -567,8 +569,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 extension AppDelegate: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         if notification.object as? NSWindow === settingsWindow {
-            // Ne pas détruire la fenêtre, juste la cacher
-            // Ceci évite le crash lors de la réouverture
+            print("🔄 Fermeture de la fenêtre des préférences")
+            // ✅ NE PAS nettoyer les références - les garder pour réutilisation
+            // La fenêtre sera réutilisée lors de la prochaine ouverture
         }
+    }
+    
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if sender === settingsWindow {
+            print("🔄 Préparation à la fermeture des préférences")
+            // ✅ Cacher la fenêtre au lieu de la fermer
+            sender.orderOut(nil)
+            return false // Empêcher la fermeture réelle
+        }
+        return true
     }
 }
